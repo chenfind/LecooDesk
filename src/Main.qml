@@ -1,10 +1,11 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 ApplicationWindow {
  id: win; width: 980; height: 760; minimumWidth: 820; minimumHeight: 700; visible: true
  title: "LecooDesk · 电源工作台"; color: win.tone("#0d1319","#f3f7f4")
- property var s: backend ? backend.state : ({soc:0,low:65,high:80,enabled:false,active:false,ready:false,error:"",mock:true,logLevel:2,hours:72,startup:false,effectiveDark:false,warningRequired:true,warningText:""})
+ property var s: backend ? backend.state : ({soc:0,low:65,high:80,enabled:false,active:false,ready:false,error:"",mock:true,logLevel:2,hours:72,startup:false,effectiveDark:false,warningRequired:true,warningText:"",monitorEnabled:true,monitorBackground:true})
  property bool dark: s.effectiveDark === true
  function tone(a,b) { return dark ? a : b }
  property bool rangeDirty: Math.round(range.first.value) !== s.low || Math.round(range.second.value) !== s.high
@@ -22,6 +23,8 @@ ApplicationWindow {
  Component.onCompleted: syncSettings()
  Connections { target: backend; function onChanged() { win.syncSettings() } }
  font.family: "Microsoft YaHei UI"
+ onVisibleChanged: { if (typeof powerMonitor !== "undefined" && powerMonitor) powerMonitor.setVisible(visible && visibility !== Window.Minimized) }
+ onVisibilityChanged: function(visibility) { if (typeof powerMonitor !== "undefined" && powerMonitor) powerMonitor.setVisible(visible && visibility !== Window.Minimized) }
  onClosing: function(close) { close.accepted = false; backend.requestClose() }
  component LabelText: Text { color: win.tone("#e6ecef","#1b2b22"); font.pixelSize: 14 }
  component ActionButton: Button {
@@ -41,9 +44,9 @@ ApplicationWindow {
   ColumnLayout {
    Layout.preferredWidth: 180; Layout.maximumWidth: 180; Layout.minimumWidth: 180; Layout.fillHeight: true; spacing: 12
    LabelText { text: "LecooDesk"; font.pixelSize: 23; font.bold: true; color: win.tone("#b5e7cc","#245d39") }
-   LabelText { text: "DEVICE STUDIO / 0.2.1"; color: win.tone("#677e8b","#718278"); font.pixelSize: 10; Layout.bottomMargin: 38 }
+   LabelText { text: "DEVICE STUDIO / 0.3.0"; color: win.tone("#677e8b","#718278"); font.pixelSize: 10; Layout.bottomMargin: 38 }
    Repeater {
-    model: ["电池与充电", "偏好设置", "使用说明"]
+    model: ["电池与充电", "电源监测", "偏好设置", "使用说明"]
     delegate: Rectangle {
      required property int index; required property string modelData
      Layout.fillWidth:true; height:48; radius:12
@@ -66,7 +69,7 @@ ApplicationWindow {
   }
   ColumnLayout {
    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 18
-   LabelText { text: page === 0 ? "让电池，保持从容。" : page === 1 ? "按你的习惯运行。" : "了解运行边界。"; font.pixelSize: 29; font.bold: true; Layout.topMargin: 10 }
+   LabelText { text: page === 0 ? "让电池，保持从容。" : page === 1 ? "看见电池的每次变化。" : page === 2 ? "按你的习惯运行。" : "了解运行边界。"; font.pixelSize: 29; font.bold: true; Layout.topMargin: 10 }
    LabelText { text: page === 0 ? "为长期插电工作，留一点余量。" : "所有设置保存在这台电脑上。"; color: win.tone("#8299a5","#61756a"); Layout.bottomMargin: 10 }
    StackLayout {
     id: pages; currentIndex: page; Layout.fillWidth: true; Layout.fillHeight: true
@@ -130,6 +133,7 @@ ApplicationWindow {
      }
      Item { Layout.fillHeight: true }
     }
+    MonitorPage { objectName:"monitorPage"; dark:win.dark; service:powerMonitor; Layout.fillWidth:true; Layout.fillHeight:true }
     ScrollView {
      id: settingsScroll; clip:true; contentWidth:availableWidth
      ColumnLayout {
@@ -140,6 +144,15 @@ ApplicationWindow {
         ColumnLayout { LabelText { text:"外观主题"; font.pixelSize:19 } LabelText { text:"跟随系统会自动响应 Windows 外观变化。"; color:win.tone("#8299a5","#61756a"); font.pixelSize:11 } }
         Item { Layout.fillWidth:true }
         ComboBox { objectName:"themeSelector"; model:["跟随系统","浅色","深色"]; currentIndex:s.theme === "dark" ? 2 : s.theme === "light" ? 1 : 0; onActivated: backend.setTheme(["system","light","dark"][currentIndex]) }
+       }
+      }
+      Panel {
+       Layout.fillWidth:true; Layout.preferredHeight:220
+       ColumnLayout { anchors.fill:parent;anchors.margins:24;spacing:10
+        RowLayout { LabelText {text:"电源数据采集";font.pixelSize:19;Layout.fillWidth:true} Toggle {objectName:"monitorEnabled";checked:s.monitorEnabled;onClicked:backend.monitoringOptions(checked,s.monitorBackground)} }
+        RowLayout {LabelText{text:"采集方式";Layout.fillWidth:true} ComboBox {objectName:"monitorMode";model:["后台持续采集","仅窗口显示时采集"];currentIndex:s.monitorBackground?0:1;onActivated:backend.monitoringOptions(s.monitorEnabled,currentIndex===0)} }
+        LabelText {text:"默认持续采集：窗口显示时每 2 秒，收起或最小化后每 30 秒。关闭采集后不再查询监测数据，已有历史保留至到期。";wrapMode:Text.Wrap;Layout.fillWidth:true;color:win.tone("#8299a5","#61756a");font.pixelSize:12}
+        LabelText {text:"历史库："+(powerMonitor ? powerMonitor.state.path : "");wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:win.tone("#728995","#718278");font.pixelSize:11}
        }
       }
       Panel {

@@ -1,4 +1,4 @@
-import sys,pathlib,os,tempfile
+import sys,pathlib,os,tempfile,math,time
 root=pathlib.Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'src'));sys.argv=['main.py','--mock'];os.environ['QT_QPA_PLATFORM']='offscreen'
 from PySide6.QtCore import QObject,QUrl,qInstallMessageHandler
 from PySide6.QtWidgets import QApplication
@@ -18,7 +18,7 @@ data=qa/'data';install=qa/'install'
 # Fresh risk gate each run without touching real user settings.
 if (data/'settings.json').exists():(data/'settings.json').unlink()
 c=main.Controller(data_dir=data,install_dir=install,hardware_factory=main.MockHardware)
-e=QQmlApplicationEngine();e.rootContext().setContextProperty('backend',c);e.load(QUrl.fromLocalFile(str(root/'src'/'Main.qml')))
+e=QQmlApplicationEngine();e.rootContext().setContextProperty('backend',c);e.rootContext().setContextProperty('powerMonitor',c.monitor);e.load(QUrl.fromLocalFile(str(root/'src'/'Main.qml')))
 assert e.rootObjects(),'QML load failed'
 w=e.rootObjects()[0];QTest.qWait(300)
 assert c.hw is None and c.state['warningRequired']
@@ -43,8 +43,30 @@ c.enable(False)
 QQmlProperty.write(slider,'first.value',70);QQmlProperty.write(slider,'second.value',80);level.setProperty('currentIndex',2);hours.setProperty('value',72)
 for theme in ('light','dark'):
  c.setTheme(theme)
- for page in range(3):
+ for page in range(4):
   w.setProperty('page',page);QTest.qWait(300);assert w.grabWindow().save(str(qa/(theme+'-'+str(page)+'.png')))
+# Representative history fixture; all data is explicitly simulated.
+c.monitor.timer.stop()
+now=time.time();history=c.monitor.history
+with history.db:
+ history.db.execute('DELETE FROM points');history.db.execute('DELETE FROM events')
+for i in range(1440):
+ if 900<=i<920:continue
+ t=now-86400+i*60
+ history.add(t,'fixture-a' if i<900 else 'fixture-b',dict(soc=65+12*math.sin(i/110),power=18*math.sin(i/40),ac=(i//180)%2==0,quality='模拟数据'))
+history.maintain(now);c.monitor.points=history.rows(now);c.monitor.event_rows=history.events(now);c.monitor.changed.emit()
+for theme in ('light','dark'):
+ c.setTheme(theme);w.setProperty('page',1);QTest.qWait(200)
+ page=w.findChild(QObject,'monitorPage');assert page is not None
+ page.selectDuration(86400000);w.resize(980,1100);QTest.qWait(250)
+ assert w.grabWindow().save(str(qa/(theme+'-monitor-history.png')))
+ assert w.findChild(QObject,'socPlot') is not None and w.findChild(QObject,'powerPlot') is not None
+ w.resize(980,760);QTest.qWait(100)
+ before=page.property('selectedStart');page.setProperty('following',False);page.updateClock();app.processEvents();assert page.property('selectedStart')==before
+ c.monitor.setVisible(False);assert c.monitor.interval()==30
+ c.monitor.setVisible(True);assert c.monitor.interval()==2
+c.monitor.configure(False,True,True);assert not c.monitor.active()
+
 c.setTheme('system');c.trayAvailable=True
 c.thresholds(70,80);c.enable(True);hw=c.hw
 assert w.close()==False and c.active and hw.pair()==[80,70]

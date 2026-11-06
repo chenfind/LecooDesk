@@ -38,6 +38,10 @@ class Tests(unittest.TestCase):
   with patch.object(c,'persist',side_effect=OSError('disk full')):c.thresholds(60,90)
   self.assertEqual((c.cfg['low'],c.cfg['high']),(70,80));self.assertEqual(c.hw.pair(),[80,70]);self.assertTrue(c.state['rangeSaveFailed'])
   c.thresholds(60,90);self.assertFalse(c.state['rangeSaveFailed']);self.assertEqual(c.hw.pair(),[90,60])
+ def test_monitor_settings_remember_without_hardware_before_consent(self):
+  c=self.make();c.monitoringOptions(False,False);self.assertFalse(c.cfg['monitorEnabled']);self.assertFalse(c.monitor.allowed)
+  d=self.make();self.assertFalse(d.cfg['monitorEnabled']);self.assertFalse(d.cfg['monitorBackground']);d.begin();self.assertIsNone(d.monitor.future);self.assertIsNone(d.monitor.history)
+  d.acceptRisk(False);self.assertFalse(d.monitor.active());self.assertIsNotNone(d.monitor.history)
  def test_no_tray_does_not_hide(self):
   c=self.make();c.acceptRisk(False);hide=QSignalSpy(c.hideRequested);c.requestClose();self.assertEqual(hide.count(),0);self.assertIn('托盘',c.error)
  def test_theme_persistence_and_follow_system(self):

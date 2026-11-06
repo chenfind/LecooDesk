@@ -23,3 +23,9 @@ py -3.14 -m venv .venv
 新增硬件能力应实现独立适配器、支持范围校验、状态快照、读回验证和恢复策略。界面不得开放任意地址写入。模拟测试与真实硬件验证应分开，不能因模拟通过就扩大白名单。
 
 打包保留QtWidgets托盘支持，并排除构建环境误带入的非Qt ICU DLL。不要移除该排除规则。演示和诊断EXE均强制使用模拟硬件。
+
+## 监测模块
+
+battery_source.py封装Windows电池类QUERY IOCTL和模拟数据源，不访问EC/SMBus。CAPABILITIES为未来适配器及整机功率保留入口，当前标记不可用。monitor.py使用单个后台工作线程执行一次查询，主线程串行接收结果及SQLite事务；停止采集会递增代次并丢弃在途结果。history.py负责有界存储与聚合。MonitorPage.qml与TrendPlot.qml使用QtQuick Canvas绘图，不需要QtCharts额外模块。监测故障独立于充电会话，不应阻止正常恢复阈值。
+
+构建后先完成模拟验收并提交源码，再运行 `.\.venv\Scripts\python.exe package_release.py` 生成发布ZIP、对应HEAD源码ZIP和SHA256SUMS。发布目录包含测试运行日志时，脚本会拒绝打包，须先将日志归档。

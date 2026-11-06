@@ -9,9 +9,10 @@ from hardware import Hardware,MockHardware
 from core import Store,Logs,ChargeSession
 from settings import DEFAULTS,WARNING_TEXT,validate_settings,valid_range,choose_log_directory
 from tray import TrayManager
+from monitor import Monitor
 MOCK='--mock' in sys.argv or '--smoke' in sys.argv or pathlib.Path(sys.executable).stem.lower() in ('lecoodesk-demo','lecoodesk-diagnostics')
 ROOT=pathlib.Path(__file__).resolve().parent
-VERSION='0.2.1'
+VERSION='0.3.0'
 
 def system_dark():
     app=QGuiApplication.instance()
@@ -58,6 +59,8 @@ class Controller(QObject):
         except Exception as e:
             self.error='设置文件无效：'+str(e);self.cfg=dict(DEFAULTS);self.config_error=True
         self.accepted=self.cfg['warningDismissed']
+        self.monitor=Monitor(base/'history'/'power.sqlite3',mock=MOCK);self.monitor.setParent(self)
+        self.monitor.configure(self.cfg['monitorEnabled'],self.cfg['monitorBackground'],False)
         self.logs.configure(self.cfg['logLevel'],self.cfg['hours'])
         logging.info('startup version=%s mock=%s theme=%s enabled_preference=%s log_path=%s warning_dismissed=%s',VERSION,MOCK,self.cfg['theme'],self.cfg['enabled'],path,self.cfg['warningDismissed'])
         if self.log_notice:logging.warning(self.log_notice)
@@ -71,7 +74,9 @@ class Controller(QObject):
         self.error=str(e);logging.exception('operation_failed');self.changed.emit()
     def persist(self):self.store.save('settings.json',self.cfg)
     def begin(self):
-        if self.accepted:self.initializeHardware()
+        if self.accepted:
+            self.monitor.configure(self.cfg['monitorEnabled'],self.cfg['monitorBackground'],True)
+            self.initializeHardware()
     def initializeHardware(self):
         if not self.accepted or self.started or self.config_error:return
         self.started=True
@@ -89,6 +94,7 @@ class Controller(QObject):
         try:
             self.cfg['warningDismissed']=bool(dismiss);self.persist()
             self.accepted=True;logging.info('risk_warning_accepted suppress_future=%s',dismiss)
+            self.monitor.configure(self.cfg['monitorEnabled'],self.cfg['monitorBackground'],True)
             self.changed.emit();self.initializeHardware()
         except Exception as e:self.fail(e)
     @Property('QVariantMap',notify=changed)
@@ -179,6 +185,17 @@ class Controller(QObject):
             self.cfg['startup']=v;self.persist()
         except Exception as e:self.fail(e)
         self.changed.emit()
+    @Slot(bool,bool)
+    def monitoringOptions(self,enabled,background):
+        previous=(self.cfg['monitorEnabled'],self.cfg['monitorBackground'])
+        try:
+            self.cfg.update(monitorEnabled=enabled,monitorBackground=background)
+            try:self.persist()
+            except Exception:
+                self.cfg.update(monitorEnabled=previous[0],monitorBackground=previous[1]);raise
+            self.monitor.configure(enabled,background,self.accepted)
+        except Exception as e:self.fail(e)
+        self.changed.emit()
     @Slot()
     def openLogs(self):os.startfile(self.logs.root)
     @Slot()
@@ -200,7 +217,7 @@ class Controller(QObject):
             if self.session:self.session.disable()
             if self.hw:self.hw.close();self.hw=None
             self.active=False;self.operational=False;self.timer.stop();self.house.stop()
-            logging.info('exit_restored');return True
+            self.monitor.close();logging.info('exit_restored');return True
         except Exception as e:self.fail(e);return False
 
 def main():
@@ -212,7 +229,7 @@ def main():
     if not server.listen(name):raise RuntimeError('无法取得单实例锁')
     c=Controller()
     qInstallMessageHandler(lambda kind,context,text:logging.getLogger('qt').log(logging.ERROR if kind in (QtMsgType.QtCriticalMsg,QtMsgType.QtFatalMsg) else logging.WARNING if kind==QtMsgType.QtWarningMsg else logging.DEBUG,'%s:%s %s',context.file,context.line,text))
-    engine=QQmlApplicationEngine();engine.rootContext().setContextProperty('backend',c);engine.load(QUrl.fromLocalFile(str(ROOT/'Main.qml')))
+    engine=QQmlApplicationEngine();engine.rootContext().setContextProperty('backend',c);engine.rootContext().setContextProperty('powerMonitor',c.monitor);engine.load(QUrl.fromLocalFile(str(ROOT/'Main.qml')))
     if not engine.rootObjects():c.shutdown();return 1
     tray=TrayManager(app,engine.rootObjects()[0],c,ROOT/'icon.ico')
     def show_existing():

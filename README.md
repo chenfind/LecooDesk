@@ -33,6 +33,10 @@ LecooDesk is an experimental Windows battery charge limit / charging threshold c
 
 </details>
 
+## 电源监测预览
+
+![电量与电池功率24小时监测界面（模拟数据）](docs/images/monitor-light.png)
+
 ## 功能
 
 - 0–100% 双滑块，开始和停止阈值至少相差 10 个百分点。
@@ -41,6 +45,7 @@ LecooDesk is an experimental Windows battery charge limit / charging threshold c
 - 深色、浅色、跟随系统主题；关闭窗口收起到系统托盘。
 - 正常退出尝试恢复启动前的阈值；无独立守护进程。
 - 可选开机自启，三级日志及自动保留时长。
+- 电源监测：电量与系统上报电池功率双图，24小时本地历史、双端时间缩放及共享游标。默认后台持续采集，窗口显示时2秒、隐藏或最小化后30秒，可完全关闭监测采集。
 
 调整滑块后点击“应用区间”。“区间已存”表示已保存但限制未启用；“区间生效”表示当前会话已应用。退出请选择托盘“恢复原设置并退出”，关闭窗口不会停止限制。异常退出不能保证恢复。
 

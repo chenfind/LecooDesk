@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 root=Path(SPECPATH)
-a=Analysis([str(root/'src'/'main.py')],pathex=[str(root/'src')],binaries=[],datas=[(str(root/'src'/'Main.qml'),'.'),(str(root/'src'/'icon.ico'),'.')],hiddenimports=[],hookspath=[str(root/'hooks')],hooksconfig={},runtime_hooks=[],excludes=['PySide6.QtWebEngineCore','PySide6.QtWebEngineWidgets','PySide6.QtPdf'],noarchive=False)
+a=Analysis([str(root/'src'/'main.py')],pathex=[str(root/'src')],binaries=[],datas=[(str(f),'.') for f in (root/'src').glob('*.qml')]+[(str(root/'src'/'icon.ico'),'.')],hiddenimports=[],hookspath=[str(root/'hooks')],hooksconfig={},runtime_hooks=[],excludes=['PySide6.QtWebEngineCore','PySide6.QtWebEngineWidgets','PySide6.QtPdf'],noarchive=False)
 # Qt 6.12 Windows uses the OS ICU API. Do not bundle similarly named,
 # incompatible ICU libraries discovered on the build host PATH.
 a.binaries=[item for item in a.binaries if Path(item[0]).name.lower() not in ('icuuc.dll','icudt78.dll')]
