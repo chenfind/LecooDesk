@@ -40,7 +40,7 @@ ScrollView {
    }
    Card { Layout.fillWidth:true;implicitHeight:83
     Column { anchors.fill:parent;anchors.margins:15;spacing:5
-     Caption{text:"电池功率 · 系统上报"}
+     Caption{text:view.modelState.latest.experimental_ec ? "电池功率 · EC 实验性" : "电池功率 · 系统上报"}
      Text { text:view.watts(view.modelState.latest.power);font.pixelSize:25;color:view.tone("#efbf82","#986026") }
     }
    }
@@ -52,9 +52,31 @@ ScrollView {
     }
    }
   }
-  Caption { Layout.fillWidth:true;text:view.modelState.mock ? "演示模式：模拟曲线，不代表实测。" : "正值 = 充电，负值 = 放电。固件可能误报方向；功率为 0 不能证明物理旁路。" }
-  Rectangle { Layout.fillWidth:true;implicitHeight:notice.implicitHeight+20;radius:10;visible:!!view.modelState.error||!!view.modelState.latest.quality;color:view.tone("#382e22","#fff4e5")
-   Caption {id:notice;anchors.fill:parent;anchors.margins:10;text:view.modelState.error || ("数据提示："+(view.modelState.latest.quality||""));color:view.tone("#efbf82","#986026")}
+  Caption { Layout.fillWidth:true;text:view.modelState.mock ? "演示模式：模拟曲线，不代表实测。" : view.modelState.latest.experimental_ec ? "EC 电量计实验性读数：正值充电、负值放电；未外部校准，不能代表适配器或整机功率。" : "正负号仅表示系统上报的充／放电方向，并非实际状态验证。本机停充时曾仍上报约 +34 W；电量下降时也不能据此认定正在充电。" }
+  Rectangle {
+   Layout.fillWidth:true
+   implicitHeight:notice.implicitHeight+20
+   radius:10
+   visible:!!notice.text
+   color:view.tone("#382e22","#fff4e5")
+   Caption {
+    id:notice
+    anchors.fill:parent;anchors.margins:10
+    text: {
+     if (view.modelState.error)
+      return view.modelState.error
+     var sample = view.modelState.latest
+     if (!sample.experimental_ec)
+      return sample.quality ? "数据提示：" + sample.quality : ""
+     var messages = []
+     if (sample.ec_measurement_error)
+      messages.push("EC 功率未知：" + sample.ec_measurement_error)
+     if (sample.windows_quality)
+      messages.push("Windows 诊断：" + sample.windows_quality)
+     return messages.join("\n")
+    }
+    color:view.tone("#efbf82","#986026")
+   }
   }
   RowLayout { visible:!!view.modelState.error;Caption{text:"故障仅暂停监测，不改变充电限制。"} Button{text:"重试采集";onClicked:view.service.retry()} }
   RowLayout {
@@ -64,33 +86,30 @@ ScrollView {
    Item {Layout.fillWidth:true}
    CheckBox {text:"跟随最新";checked:view.following;onClicked:{view.following=checked;if(checked)view.selectDuration(view.selectedEnd-view.selectedStart)}}
   }
-  Card { Layout.fillWidth:true;implicitHeight:440
+  Card { Layout.fillWidth:true;implicitHeight:576
    ColumnLayout {anchors.fill:parent;anchors.margins:14;spacing:4
     Caption{text:"电量 · %";color:view.tone("#99dcb0","#35764b")}
     TrendPlot {objectName:"socPlot";Layout.fillWidth:true;Layout.preferredHeight:125;points:view.modelState.points;events:view.modelState.events;startTime:view.selectedStart;endTime:view.selectedEnd;dark:view.dark;cursorTime:view.cursor;onHovered:function(t){view.pick(t)} }
     Caption{text:"电池功率 · W（历史细线范围为最小值—最大值）";color:view.tone("#efbf82","#986026")}
     TrendPlot {objectName:"powerPlot";Layout.fillWidth:true;Layout.preferredHeight:160;power:true;points:view.modelState.points;events:view.modelState.events;startTime:view.selectedStart;endTime:view.selectedEnd;dark:view.dark;cursorTime:view.cursor;onHovered:function(t){view.pick(t)} }
     Caption {Layout.fillWidth:true;Layout.preferredHeight:47;text:view.cursor ? (view.picked ? view.timeText(view.picked.t)+"  ·  "+(view.picked.soc===null?"—":Number(view.picked.soc).toFixed(1)+"%")+"  ·  "+view.watts(view.picked.power)+(view.picked.aggregate?"  ·  30 秒聚合":"  ·  原始采样")+(view.picked.quality?"\n"+view.picked.quality:"") : "该时段无样本") : "悬停查看同一时刻的数据。虚线表示电源或采样事件；数据中断不连线。"}
-   }
-  }
-  Card {Layout.fillWidth:true;implicitHeight:172
-   ColumnLayout {anchors.fill:parent;anchors.margins:14;spacing:2
     Caption{text:view.timeText(view.selectedStart)+" — "+view.timeText(view.selectedEnd);Layout.fillWidth:true}
     TrendPlot {Layout.fillWidth:true;Layout.preferredHeight:35;compact:true;points:view.modelState.points;startTime:view.domainStart;endTime:view.domainEnd;dark:view.dark}
-    RangeSlider {id:selection;
-     background: Rectangle {
-      x:selection.leftPadding;y:selection.topPadding+selection.availableHeight/2-height/2;width:selection.availableWidth;height:5;radius:3;color:view.tone("#34483c","#d5e1d8")
-      Rectangle {x:selection.first.position*parent.width;width:(selection.second.position-selection.first.position)*parent.width;height:parent.height;radius:3;color:view.tone("#80bd98","#68a77d")
-       MouseArea {x:12;y:-9;width:Math.max(0,parent.width-24);height:23;cursorShape:Qt.SizeHorCursor
-        property double pressX:0;property double low:0;property double high:0
-        onPressed:function(mouse){pressX=mapToItem(selection,mouse.x,mouse.y).x;low=selection.first.value;high=selection.second.value;view.following=false}
-        onPositionChanged:function(mouse){if(pressed){var delta=(mapToItem(selection,mouse.x,mouse.y).x-pressX)/selection.availableWidth*100;var start=Math.max(0,Math.min(100-(high-low),low+delta));selection.first.value=start;selection.second.value=start+high-low;view.cursor=0}}
-       }
-      }
-     }
-objectName:"historyRange";Layout.fillWidth:true;from:0;to:100;first.value:100-600000/864000;second.value:100
-     first.onMoved:{if(second.value-first.value<0.14)first.value=second.value-0.14;view.following=false;view.cursor=0}
-     second.onMoved:{if(second.value-first.value<0.14)second.value=first.value+0.14;view.following=false;view.cursor=0}
+    EdgeRangeSlider {
+     id:selection
+     objectName:"historyRange"
+     Layout.fillWidth:true
+     from:0; to:100
+     first.value:100-600000/864000; second.value:100
+     minimumGap:0.14
+     panEnabled:true
+     trackColor:view.tone("#34483c","#d5e1d8")
+     rangeColor:view.tone("#80bd98","#68a77d")
+     leftColor:view.tone("#c8efd5","#ffffff")
+     rightColor:view.tone("#efbf82","#ffffff")
+     leftBorder:"#68a77d"
+     rightBorder:"#b8752e"
+     onEdited:{ view.following=false; view.cursor=0 }
     }
     RowLayout {Button{text:"← 平移";flat:true;onClicked:{view.following=false;var delta=Math.min(selection.first.value,(selection.second.value-selection.first.value)/2);selection.first.value-=delta;selection.second.value-=delta}} Item{Layout.fillWidth:true} Caption{text:"两端缩放 / 中间平移 · 最小约 2 分钟"} Item{Layout.fillWidth:true} Button{text:"平移 →";flat:true;onClicked:{view.following=false;var delta=Math.min(100-selection.second.value,(selection.second.value-selection.first.value)/2);selection.second.value+=delta;selection.first.value+=delta}}}
    }

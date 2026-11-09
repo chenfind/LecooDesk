@@ -12,6 +12,16 @@ from tray import TrayManager
 from monitor import Monitor
 MOCK='--mock' in sys.argv or '--smoke' in sys.argv or pathlib.Path(sys.executable).stem.lower() in ('lecoodesk-demo','lecoodesk-diagnostics')
 ROOT=pathlib.Path(__file__).resolve().parent
+EC_DATA_ARG='--ec-experimental-data='
+
+def experimental_data_dir():
+    if MOCK:return None
+    for arg in sys.argv[1:]:
+        if arg.startswith(EC_DATA_ARG):
+            path=pathlib.Path(arg[len(EC_DATA_ARG):])
+            if not path.is_absolute():raise ValueError('实验数据目录必须为绝对路径')
+            return path/'LecooDesk'
+    return None
 VERSION='0.3.0'
 
 def system_dark():
@@ -46,7 +56,8 @@ class Controller(QObject):
     exitRequested=Signal()
     def __init__(self,data_dir=None,install_dir=None,hardware_factory=None):
         super().__init__()
-        base=pathlib.Path(data_dir) if data_dir else pathlib.Path(os.environ.get('LECOODESK_DATA',os.environ.get('LOCALAPPDATA',str(ROOT))))/('LecooDesk-demo' if MOCK else 'LecooDesk')
+        ec_data=experimental_data_dir()
+        base=pathlib.Path(data_dir or ec_data) if data_dir or ec_data else pathlib.Path(os.environ.get('LECOODESK_DATA',os.environ.get('LOCALAPPDATA',str(ROOT))))/('LecooDesk-demo' if MOCK else 'LecooDesk')
         self.store=Store(base);self.cfg=dict(DEFAULTS)
         self.error='';self.active=False;self.soc=0;self.temp=0;self.hw=None;self.session=None
         self.range_save_failed=False;self.operational=False;self.accepted=False;self.started=False;self.config_error=False;self.trayAvailable=False
@@ -59,10 +70,16 @@ class Controller(QObject):
         except Exception as e:
             self.error='设置文件无效：'+str(e);self.cfg=dict(DEFAULTS);self.config_error=True
         self.accepted=self.cfg['warningDismissed']
-        self.monitor=Monitor(base/'history'/'power.sqlite3',mock=MOCK);self.monitor.setParent(self)
+        experimental_source=None
+        if not MOCK and (self.cfg['monitorSource']=='ec' or ec_data is not None or os.environ.get('LECOODESK_EC_POWER')=='1'):
+            from ec_battery_source import ExperimentalBatterySource
+            experimental_source=ExperimentalBatterySource(lambda:self.hw)
+        history_name='power-ec-experimental.sqlite3' if experimental_source else 'power.sqlite3'
+        self.monitor=Monitor(base/'history'/history_name,mock=MOCK,source=experimental_source);self.monitor.setParent(self)
         self.monitor.configure(self.cfg['monitorEnabled'],self.cfg['monitorBackground'],False)
         self.logs.configure(self.cfg['logLevel'],self.cfg['hours'])
         logging.info('startup version=%s mock=%s theme=%s enabled_preference=%s log_path=%s warning_dismissed=%s',VERSION,MOCK,self.cfg['theme'],self.cfg['enabled'],path,self.cfg['warningDismissed'])
+        logging.info('monitor_source=%s history=%s','ec_experimental' if experimental_source else 'default',self.monitor.path)
         if self.log_notice:logging.warning(self.log_notice)
         if self.error:logging.error(self.error)
         self.timer=QTimer(self);self.timer.timeout.connect(self.refresh);self.timer.start(3000)
@@ -174,16 +191,31 @@ class Controller(QObject):
             if not getattr(sys,'frozen',False):raise RuntimeError('请使用打包后的 EXE 配置自启')
             name='LecooDesk-'+str(os.getlogin())
             if v:
-                if not pathlib.Path(sys.executable).is_relative_to(pathlib.Path(os.environ['ProgramFiles'])):raise RuntimeError('请先安装到 Program Files，再启用高权限自启')
                 sid=subprocess.check_output(['whoami','/user','/fo','csv','/nh'],text=True,creationflags=0x08000000).strip().split(',')[-1].strip('"')
-                exe=html.escape(sys.executable);sid=html.escape(sid)
-                xml=f'''<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><UserId>{sid}</UserId><Delay>PT15S</Delay></LogonTrigger></Triggers><Principals><Principal id="Author"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit></Settings><Actions Context="Author"><Exec><Command>{exe}</Command></Exec></Actions></Task>'''
+                executable=pathlib.Path(sys.executable).resolve()
+                exe=html.escape(str(executable));sid=html.escape(sid)
+                working_dir=html.escape(str(executable.parent))
+                experimental_args=subprocess.list2cmdline([arg for arg in sys.argv[1:] if arg.startswith(EC_DATA_ARG)])
+                arguments=f'<Arguments>{html.escape(experimental_args)}</Arguments>' if experimental_args else ''
+                xml=f'''<?xml version="1.0" encoding="UTF-16"?><Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"><Triggers><LogonTrigger><UserId>{sid}</UserId><Delay>PT15S</Delay></LogonTrigger></Triggers><Principals><Principal id="Author"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals><Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit></Settings><Actions Context="Author"><Exec><Command>{exe}</Command>{arguments}<WorkingDirectory>{working_dir}</WorkingDirectory></Exec></Actions></Task>'''
                 p=self.store.root/'startup.xml';p.write_text(xml,encoding='utf-16');args=['schtasks','/Create','/TN',name,'/XML',str(p),'/F']
             else:args=['schtasks','/Delete','/TN',name,'/F']
             result=subprocess.run(args,capture_output=True,text=True,creationflags=0x08000000)
             if result.returncode:raise RuntimeError(result.stdout+result.stderr)
             self.cfg['startup']=v;self.persist()
         except Exception as e:self.fail(e)
+        self.changed.emit()
+    @Slot(str)
+    def setMonitorSource(self,source):
+        previous=self.cfg['monitorSource']
+        try:
+            if source not in ('windows','ec'):raise ValueError('功率来源无效')
+            self.cfg['monitorSource']=source
+            self.persist()
+            self.error=''
+        except Exception as e:
+            self.cfg['monitorSource']=previous
+            self.fail(e)
         self.changed.emit()
     @Slot(bool,bool)
     def monitoringOptions(self,enabled,background):

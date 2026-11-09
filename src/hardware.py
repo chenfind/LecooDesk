@@ -28,10 +28,23 @@ class Hardware:
   log.debug('port_select port=%04x value=%02x',p,v)
   self.ctl(0x9C402008,struct.pack('<HB',p,v),16)
  def read(self,a):
-  if a not in (0x2000,0x2001,0x2002,0x470,0x493,0x4bb,0x4bc):raise ValueError('address')
+  if a not in (0x2000,0x2001,0x2002,0x470,0x493,0x4bb,0x4bc,0x8f3,0x8f4,0x491,0x492):raise ValueError('address')
   log.debug('read_begin addr=%04x',a)
   for p,v in [(0x4e,0x2e),(0x4f,0x11),(0x4e,0x2f),(0x4f,a>>8),(0x4e,0x2e),(0x4f,0x10),(0x4e,0x2f),(0x4f,a&255),(0x4e,0x2e),(0x4f,0x12),(0x4e,0x2f)]:self.port(p,v)
   v=self.ctl(0x9C402004,struct.pack('<H',0x4f),1)[0];log.debug('read addr=%04x value=%d',a,v);return v
+ def battery_telemetry(self):
+  # Called only on the controller thread, alongside all threshold operations.
+  def word(hi,lo):
+   for _ in range(3):
+    first=(self.read(hi)<<8)|self.read(lo)
+    second=(self.read(hi)<<8)|self.read(lo)
+    if first==second:return first
+   raise RuntimeError('电量计缓存更新中，无法取得一致样本')
+  raw=word(0x8f4,0x8f3);voltage=word(0x492,0x491)
+  if not 8000<=voltage<=20000:raise RuntimeError('电池电压缓存超出验证范围')
+  signed=raw-65536 if raw&0x8000 else raw
+  if abs(signed*8/25)>10000:raise RuntimeError('电流缓存超出实验范围')
+  return {'ec_raw_current':signed,'ec_voltage_mv':voltage,'ec_current_ma':signed*8/25,'ec_power_w':signed*8/25*voltage/1000000}
  def write(self,a,v):
   if a not in (0x4bb,0x4bc) or not 0<=v<=100:raise ValueError('write')
   self.read(a);self.port(0x4f,v)

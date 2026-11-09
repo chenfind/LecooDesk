@@ -20,6 +20,24 @@ class Tests(unittest.TestCase):
   for c in self.controllers:
    c.shutdown();logging.getLogger().removeHandler(c.logs.handler);c.logs.handler.close();c.deleteLater()
   app.processEvents();self.tmp.cleanup()
+ def test_daily_ec_source_selection_persists(self):
+  c=self.make();c.setMonitorSource('ec')
+  with patch.object(main,'MOCK',False):
+   d=self.make()
+  self.assertEqual(d.cfg['monitorSource'],'ec')
+  self.assertEqual(d.monitor.path.name,'power-ec-experimental.sqlite3')
+  self.assertIsNone(d.hw)
+ def test_startup_task_uses_executable_folder(self):
+  from types import SimpleNamespace
+  from xml.etree import ElementTree
+  c=self.make();exe=self.root/'Package & data'/'LecooDesk.exe'
+  with patch.object(main,'MOCK',False),patch.object(main.sys,'frozen',True,create=True),patch.object(main.sys,'executable',str(exe)),patch.object(main.os,'getlogin',return_value='local-user'),patch.object(main.subprocess,'check_output',return_value='"local-user","S-1-5-21-1"'),patch.object(main.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
+   c.startup(True)
+   self.assertIn('/Create',run.call_args.args[0])
+  tree=ElementTree.parse(c.store.root/'startup.xml')
+  self.assertEqual(tree.findtext('.//{*}Command'),str(exe.resolve()))
+  self.assertEqual(tree.findtext('.//{*}WorkingDirectory'),str(exe.parent.resolve()))
+  self.assertTrue(c.cfg['startup'])
  def test_no_hardware_before_consent_even_when_enabled(self):
   Store(self.root/'data').save('settings.json',{'enabled':True,'low':70,'high':80})
   c=self.make();c.begin();c.refresh();self.assertEqual(self.calls,0);self.assertIsNone(c.hw)

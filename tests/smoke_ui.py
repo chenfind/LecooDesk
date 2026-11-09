@@ -1,6 +1,6 @@
 import sys,pathlib,os,tempfile,math,time
 root=pathlib.Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'src'));sys.argv=['main.py','--mock'];os.environ['QT_QPA_PLATFORM']='offscreen'
-from PySide6.QtCore import QObject,QUrl,qInstallMessageHandler
+from PySide6.QtCore import QObject,QUrl,qInstallMessageHandler,QPointF,Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQml import QQmlApplicationEngine,QQmlProperty
@@ -40,6 +40,16 @@ c.enable(True);app.processEvents();assert button.property('text')=='区间生效
 QQmlProperty.write(slider,'first.value',65);app.processEvents()
 assert button.property('enabled') and '60%–90%' in status.property('text')
 c.enable(False)
+# Drag the left handle into the right one. Its edge stops at the legal gap.
+left=slider.findChild(QObject,'leftRangeHandle');right=slider.findChild(QObject,'rightRangeHandle')
+assert abs(left.y()-right.y())<0.01
+pos=left.mapToScene(QPointF(left.width()/2,left.height()/2)).toPoint()
+QTest.mousePress(w,Qt.LeftButton,Qt.NoModifier,pos)
+target=right.mapToScene(QPointF(right.width()/2,right.height()/2)).toPoint()
+QTest.mouseMove(w,target)
+QTest.mouseRelease(w,Qt.LeftButton,Qt.NoModifier,target)
+assert QQmlProperty.read(slider,'first.value')==80 and QQmlProperty.read(slider,'second.value')==90, (QQmlProperty.read(slider,'first.value'),QQmlProperty.read(slider,'second.value'),pos,left.x(),right.x())
+assert left.x()+left.width()<=right.x()+0.01
 QQmlProperty.write(slider,'first.value',70);QQmlProperty.write(slider,'second.value',80);level.setProperty('currentIndex',2);hours.setProperty('value',72)
 for theme in ('light','dark'):
  c.setTheme(theme)
@@ -58,6 +68,10 @@ history.maintain(now);c.monitor.points=history.rows(now);c.monitor.event_rows=hi
 for theme in ('light','dark'):
  c.setTheme(theme);w.setProperty('page',1);QTest.qWait(200)
  page=w.findChild(QObject,'monitorPage');assert page is not None
+ history_slider=w.findChild(QObject,'historyRange')
+ history_slider.setValues(99.86,100)
+ lo=history_slider.findChild(QObject,'leftRangeHandle');hi=history_slider.findChild(QObject,'rightRangeHandle')
+ assert abs(lo.y()-hi.y())<0.01 and lo.x()+lo.width()<=hi.x()+0.01
  page.selectDuration(86400000);w.resize(980,1100);QTest.qWait(250)
  assert w.grabWindow().save(str(qa/(theme+'-monitor-history.png')))
  assert w.findChild(QObject,'socPlot') is not None and w.findChild(QObject,'powerPlot') is not None

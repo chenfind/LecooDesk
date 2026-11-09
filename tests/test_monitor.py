@@ -38,6 +38,14 @@ class HistoryTests(unittest.TestCase):
  def test_nonfinite_rejected(self):
   with self.assertRaises(ValueError):self.h.add(self.now,'a',dict(SAMPLE,power=float('nan')))
 class SourceTests(unittest.TestCase):
+ def test_critical_flag_and_unconfirmed_positive_rate(self):
+  i=Info();i.full=80080
+  r=normalize(Status(9,64064,16000,34000),i)
+  self.assertEqual(r['power'],34)
+  self.assertIn('严重状态',r['quality'])
+  self.assertIn('实际充放电状态未确认',r['quality'])
+  self.assertEqual(normalize(Status(5,64064,16000,34000),i)['quality'],'')
+
  def test_unknown_relative_and_suspicious_sign_are_not_faked(self):
   i=Info();i.full=80080;s=Status(4,52052,16000,20000);r=normalize(s,i)
   self.assertEqual(r['power'],20);self.assertIn('离线',r['quality'])

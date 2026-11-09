@@ -54,7 +54,8 @@ def normalize(status,info):
  if soc is None:quality.append('电量不可用')
  if not ac and (status.state&4 or power is not None and power>0):quality.append('离线却上报充电')
  if status.state&6==6:quality.append('充放电标志冲突')
- if status.state&8 and soc is not None and soc>10:quality.append('状态标志与电量不协调')
+ if status.state&8:quality.append('系统上报电池严重状态标志（非软件阈值告警）；请结合系统电池诊断核实')
+ if power is not None and ((power>0 and not status.state&4) or (power<0 and not status.state&2)):quality.append('功率方向与充放电标志不一致，实际充放电状态未确认')
  return {'soc':soc,'power':power,'ac':ac,'quality':'；'.join(quality),'state':status.state,'source':'Windows battery QUERY_STATUS'}
 
 class NativeBatterySource:

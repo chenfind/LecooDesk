@@ -105,17 +105,18 @@ ApplicationWindow {
         LabelText { text: "开始充电  " + Math.round(range.first.value) + "%"; color: win.tone("#a7dfbd","#296f43"); Layout.fillWidth: true }
         LabelText { text: "停止充电  " + Math.round(range.second.value) + "%"; color: win.tone("#a7dfbd","#296f43") }
        }
-       RangeSlider {
-        id: range; objectName: "thresholdRange"; Layout.fillWidth: true; from: 0; to: 100; stepSize: 1
-                first.value: 65; second.value: 80; snapMode: RangeSlider.SnapAlways
-        implicitHeight:40
-        background: Rectangle { x:range.leftPadding; y:range.topPadding+range.availableHeight/2-height/2; width:range.availableWidth; height:5; radius:3; color:win.tone("#33434d","#c9d8ce")
-         Rectangle { x:range.first.position*parent.width; width:(range.second.position-range.first.position)*parent.width; height:parent.height; radius:3; color:win.tone("#a6e3bf","#5ba475") }
-        }
-        first.handle: Rectangle { x:range.leftPadding+range.first.visualPosition*(range.availableWidth-width); y:range.topPadding+range.availableHeight/2-height/2; implicitWidth:24; implicitHeight:24; radius:12; color:win.tone("#d0f3dc","#ffffff"); border.width:range.first.pressed ? 4 : 2; border.color:win.tone("#5a9e74","#4a9563"); scale:range.first.pressed ? 1.15 : 1; Behavior on scale { NumberAnimation { duration:120 } } }
-        second.handle: Rectangle { x:range.leftPadding+range.second.visualPosition*(range.availableWidth-width); y:range.topPadding+range.availableHeight/2-height/2; implicitWidth:24; implicitHeight:24; radius:12; color:win.tone("#d0f3dc","#ffffff"); border.width:range.second.pressed ? 4 : 2; border.color:win.tone("#5a9e74","#4a9563"); scale:range.second.pressed ? 1.15 : 1; Behavior on scale { NumberAnimation { duration:120 } } }
-        first.onMoved: { if (second.value - first.value < 10) first.value = second.value - 10 }
-        second.onMoved: { if (second.value - first.value < 10) second.value = first.value + 10 }
+       EdgeRangeSlider {
+        id: range
+        objectName: "thresholdRange"
+        Layout.fillWidth: true
+        from: 0; to: 100; stepSize: 1; minimumGap: 10
+        first.value: 65; second.value: 80
+        trackColor: win.tone("#33434d","#c9d8ce")
+        rangeColor: win.tone("#a6e3bf","#5ba475")
+        leftColor: win.tone("#d0f3dc","#ffffff")
+        rightColor: leftColor
+        leftBorder: win.tone("#5a9e74","#4a9563")
+        rightBorder: leftBorder
        }
        RowLayout {
         LabelText { text: "0%"; color: win.tone("#657c88","#718278"); Layout.fillWidth: true }
@@ -128,7 +129,7 @@ ApplicationWindow {
          enabled:win.rangeDirty || s.rangeSaveFailed
          onClicked: backend.thresholds(Math.round(range.first.value),Math.round(range.second.value)) }
        }
-       LabelText { text: "显示电量可能短暂超过设定值约 1%；下限用于停充后的再次充电。"; color: win.tone("#637985","#718278"); font.pixelSize: 11; wrapMode: Text.Wrap; Layout.fillWidth: true }
+       LabelText { text: "固件按阈值控制充电。当前电量高于上限时，本机可能由电池参与供电，功率读数也可能延迟更新。"; color: win.tone("#637985","#718278"); font.pixelSize: 11; wrapMode: Text.Wrap; Layout.fillWidth: true }
       }
      }
      Item { Layout.fillHeight: true }
@@ -147,10 +148,20 @@ ApplicationWindow {
        }
       }
       Panel {
-       Layout.fillWidth:true; Layout.preferredHeight:220
+       Layout.fillWidth:true; Layout.preferredHeight:254
        ColumnLayout { anchors.fill:parent;anchors.margins:24;spacing:10
         RowLayout { LabelText {text:"电源数据采集";font.pixelSize:19;Layout.fillWidth:true} Toggle {objectName:"monitorEnabled";checked:s.monitorEnabled;onClicked:backend.monitoringOptions(checked,s.monitorBackground)} }
         RowLayout {LabelText{text:"采集方式";Layout.fillWidth:true} ComboBox {objectName:"monitorMode";model:["后台持续采集","仅窗口显示时采集"];currentIndex:s.monitorBackground?0:1;onActivated:backend.monitoringOptions(s.monitorEnabled,currentIndex===0)} }
+        RowLayout {
+         LabelText { text:"功率来源（重启后生效）"; Layout.fillWidth:true }
+         ComboBox {
+          objectName:"powerSource"
+          enabled:!s.mock
+          model:["Windows 电池接口","EC 电量计（实验性）"]
+          currentIndex:s.monitorSource==="ec" ? 1 : 0
+          onActivated:backend.setMonitorSource(currentIndex===1 ? "ec" : "windows")
+         }
+        }
         LabelText {text:"默认持续采集：窗口显示时每 2 秒，收起或最小化后每 30 秒。关闭采集后不再查询监测数据，已有历史保留至到期。";wrapMode:Text.Wrap;Layout.fillWidth:true;color:win.tone("#8299a5","#61756a");font.pixelSize:12}
         LabelText {text:"历史库："+(powerMonitor ? powerMonitor.state.path : "");wrapMode:Text.WrapAnywhere;Layout.fillWidth:true;color:win.tone("#728995","#718278");font.pixelSize:11}
        }
@@ -159,7 +170,7 @@ ApplicationWindow {
        Layout.fillWidth:true; Layout.preferredHeight:135
        ColumnLayout { anchors.fill:parent; anchors.margins:24
         RowLayout { LabelText { text:"登录 Windows 后启动"; font.pixelSize:19; Layout.fillWidth:true } Toggle { checked:s.startup; onClicked:backend.startup(checked) } }
-        LabelText { text:"启动后先确认风险，再沿用启用偏好。选择不再提示后自动应用。"; color:win.tone("#8299a5","#61756a"); font.pixelSize:12; wrapMode:Text.Wrap; Layout.fillWidth:true }
+        LabelText { text:"从当前程序目录启动。移动程序后请重新启用自启，以更新路径。"; color:win.tone("#8299a5","#61756a"); font.pixelSize:12; wrapMode:Text.Wrap; Layout.fillWidth:true }
        }
       }
       Panel {

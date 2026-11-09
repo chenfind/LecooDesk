@@ -52,6 +52,7 @@ class Monitor(QObject):
    except Exception as e:
     if generation==self.generation and self.active():self.error='采集暂停：'+str(e);logging.exception('monitor_failed');self.changed.emit()
   if self.active() and self.future is None and time.monotonic()>=self.next_due:
+   if hasattr(self.source,'prepare'):self.source.prepare()
    if self.pool is None:self.pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='battery-query')
    self.future=(self.pool.submit(self.source.sample),self.generation);self.next_due=time.monotonic()+self.interval()
  def record(self,sample):
