@@ -1,0 +1,53 @@
+.gitignore
+  s_a9812505aed4b2::t_06e31a935e1416 13-15
+CHANGELOG.md
+  s_a9812505aed4b2::t_daf69a56b3e8c5 26-44
+docs/DEVELOPMENT.md
+  s_a9812505aed4b2::t_0e199a40fc4876 32-41
+docs/USAGE.md
+  s_a9812505aed4b2::t_417f3b6e761a2c 21-23
+src/EdgeRangeSlider.qml
+  s_a9812505aed4b2::t_2661e4164ec375 1-131
+src/Main.qml
+  s_a9812505aed4b2::t_257495f679dfb6 108-119,132,151,155-164,173
+src/MonitorPage.qml
+  s_a9812505aed4b2::t_b7345c473d0b6a 43,55-79,89,98-112
+src/battery_source.py
+  s_a9812505aed4b2::t_67306caef2c67f 57-58
+src/ec_battery_source.py
+  s_a9812505aed4b2::t_bdb0aefb4f7842 1-23
+src/hardware.py
+  s_a9812505aed4b2::t_3a8fe695ec0995 31,35-47,66-68
+src/main.py
+  s_a9812505aed4b2::t_8fa62cde55a787 15-24,59-60,73-78,82,195-200,208-219
+src/monitor.py
+  s_a9812505aed4b2::t_1025c24b4a7441 55
+src/settings.py
+  s_a9812505aed4b2::t_fe1e3fa44174fd 3,15
+start-ec-experimental.ps1
+  s_a9812505aed4b2::t_b6eaac5faa3e4b 1-3
+tests/smoke_ui.py
+  s_a9812505aed4b2::t_ac97d20dad449f 3,43-52,71-74
+tests/test_ec_battery_source.py
+  s_a9812505aed4b2::t_ee6c93c2d03f81 1-31
+tests/test_lifecycle.py
+  s_a9812505aed4b2::t_ac8afeaf25c011 23-40
+tests/test_monitor.py
+  s_a9812505aed4b2::t_7875ab79fb0a33 41-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f659603bde71fc3d28fd3cee570cad85eebb48e8",
+  "prompts": {},
+  "sessions": {
+    "s_a9812505aed4b2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aeb1-c4e7-7602-aeb0-61dc595e157c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "chenfind <chenfind@users.noreply.github.com>"
+    }
+  }
+}
